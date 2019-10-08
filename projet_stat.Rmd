@@ -1,0 +1,443 @@
+---
+title: ' Mini-projet Statistique MDI220 '
+author: "Raul Alfredo de Sousa Silva"
+output:
+  html_document:
+    number_sections: no
+    toc: yes
+  pdf_document:
+    number_sections: yes
+    toc: yes
+---
+
+
+Le but de ce rapport est de présenter les réponses et discuter de l'analyse fait du point de vue statistique, sur les données étudiées pendant l'exécution des exercices.
+
+# **Exercice 1**: Exploration des données, recherche de leur loi
+
+On commence par l'importation des données télechargées de <https://innovwiki.ethz.ch/v1/images/NuclearPowerAccidents2016.csv>. Ces données sont importées par l'interface d'importation dans l'onglet "file", ou en exécutant ce code ci-dessus:
+```{r}
+set.seed(1,kind="Marsaglia-Multicarry")
+Nuclear <- read.csv("C:/Users/Raul/Dropbox/Material 2018-2/CreneauD/MDI220/projet/NuclearPowerAccidents2016.csv")
+View(Nuclear)
+```
+Une fois obtenues les données, on peut faire une petite routine pour trouver les données concernant aux accidents avant 28 mars 1979:
+```{r}
+Nuclear$Date = as.POSIXct(Nuclear$Date,format='%m/%d/%Y'); 
+#' Convertion de format a fin d'utilizer le commend sort 
+M = order(Nuclear$Date, na.last = TRUE, decreasing = FALSE, method = c("auto", "shell", "radix"))
+#' Ordonne la matrice par date 
+Date = as.POSIXct("03/28/1979",format='%m/%d/%Y');
+#' Variable de comparaison
+cost = rep(0, 55);
+#' Création d'une matrice nulle
+i = 1;
+j = 1;
+#' Cherche d'eventuels valeurs non numeriques (NA)
+while (Nuclear$Date[M[i]] < Date)
+{
+  if (!is.na(Nuclear$Cost..millions.2013US..[M[i]])){
+    cost[j] = Nuclear$Cost..millions.2013US..[M[i]];
+    j = j+1;
+  }
+  i= i+1;
+}
+```
+La fonction quantile est une fonction qui permet de diviser la probabilité cumulé en $n$ parties, quel que soit $n$. Donc, soit $p$, une valeur de probabilité entre 0 e 1, donné par:
+$$ p = \dfrac{i}{n}\ \ \ \ i = 1,2,\cdots,n-1$$
+La valeur qu'une variable aléatoire correspondant à cette probabilité cumulative doit assumer est donnée par:
+
+$$x = F^{-1}(p)$$
+Si nous parlons d'une variable aléatoire qui suit une distribution gaussienne de moyenne $\mu = 0$ et $\sigma = 1$, alors, nous pouvons noter l'expression dernière comme suit:
+
+$$x = F^{-1}(p;0,1)$$
+Une importante propriété de la loi gaussienne est la possibilité de comparer, deux distributions qui suivent cette loi même si la moyenne et la variance sont différentes. Cela marche à cause de la possibilité de normaliser les variables aléatoires, quelle que soit leurs valeurs de $\mu$ et $\sigma$, par rapport à une loi normale de moyenne 0 e variance 1, à travers de:
+
+$$X = \dfrac{Y - \mu}{\sigma}$$
+De cette façon, nous avons changé notre variable aléatoire $Y \thicksim \mathcal{N}(\mu,\sigma)$ par une variable $X \thicksim \mathcal{N}(0,1)$. Bien sûr que, si maintenant, nous calculons le quantile correspondant à la probabilité $p$ mentionné auparavant, le résultat restera x. Mais si nous voulions retourner à la variable aléatoire $Y$ initial, il ne faut pas refaire tour le calcul du quantile à partir de la définition, Tout ce qui est nécessaire est de comprendre qui une fois que $X$ est défini comme une normalisation de $Y$, toutes les valeurs de $Y$ sont représentés en $X$, et encore plus intéressant est que la relation entre les deux est linéaire.
+
+Ainsi, une fois que $x$ a été calculé dans une distribution centré, la seule chose qu'il faut faire pour trouver la valeur $y$ qui correspond à la même valeur de probabilité conditionnelle, est d'inverser la normalisation, c'est-à-dire qu'y vaut:
+$$F^{-1}(p;\mu,\sigma) = y = \mu + \sigma \cdot x =\mu + \sigma \cdot F^{-1}(p;0,1) $$ 
+Donc, nous pouvons faire un graphique des quantiles pour nous-mêmes:
+```{r}
+set.seed(2,kind="Marsaglia-Multicarry")
+l = length(cost)
+cost_ordered = sort(cost)
+lambda = 1/mean(cost)
+proba = seq(1/(2*i), (2*l-1)/(2*l), length.out = l)
+q = qnorm(proba)
+ech_quantiers = cost_ordered
+teo_quantiers = q
+plot(teo_quantiers,ech_quantiers,main = "QQ-plot à main")
+t = seq(-3, 3, length.out = 50)
+y = t*(cost_ordered[45]-cost_ordered[15])/(q[45]-q[15])+ mean(cost)
+lines(t,y)
+```
+
+Ou, en utilisant les fonctions *qqnorm* et *qqline*
+
+```{r}
+qqnorm(cost)
+qqline(cost, datax = FALSE, distribution = qnorm,
+       probs = c(0.25, 0.75), qtype = 7)
+```
+
+On voit, à partir des graphiques, qu'il n'y a pas de possibilité que notre variable aléatoire suive une loi guassienne, une fois qu'une droite n'est pas du tout capable de suivre la tendance des données.
+
+Avec ce résultat, nous devons, donc, chercher une nouvelle distribution, qui s'adapte mieux à nos données. Une bonne tentative serait de dire que les données suivent une loi exponentielle. Pour tester cette idée, il faut chercher à adapter les idées du quantil.
+
+Pour normaliser une loi exponentielle, ce qu'il faut faire, est de percevoir que la chose qui change entre une distribution et l'autre est le paramètre $\lambda$. Alors, nous pouvons normaliser nos données qui suivent une loi exponentielle $\mathcal{E}(\lambda)$ quelconque par rapport à une loi exponentielle de $\lambda = 1$. De cette façon, nous pouvons faire un changement de variable, comme fait dans la distribution normal.
+
+$$X = Y\cdot\lambda$$
+Ainsi, $X$ est une variable aléatoire $X \thicksim \mathcal{E}(1)$. Comme ça, on peut Utiliser la fonction de quantile pour une loi exponentielle quelconque, à condition de l'avoir normalisé avant.
+
+À la fin, en ayant le seuil $x$ lié à la probabilité cumulé de cette distribution, le seuil $y$ correspondant est calculé par la division de $x$ par $\lambda$, c'est-à-dire:
+
+$$F^{-1}(p;\lambda) = y = \dfrac{x}{\lambda} = \dfrac{1}{\lambda}F^{-1}(p;\lambda)$$
+
+Donc, nous pouvons faire un graphique des quantiles pour nous-mêmes:
+```{r}
+set.seed(2,kind="Marsaglia-Multicarry")
+l = length(cost)
+proba = seq(1/(2*i), (2*l-1)/(2*l), length.out = l)
+q = qexp(proba)
+ech_quantiers = cost_ordered
+teo_quantiers = q
+plot(teo_quantiers,ech_quantiers,main = "Exp QQ-plot à main")
+t = seq(0, 5, length.out = 50)
+y = t*(cost_ordered[41]-cost_ordered[14])/(q[41]-q[14])
+lines(t,y)
+```
+
+Nous pouvons faire aussi un graphique qui montre comment sont distribués les données tout au long de l'axe $x$.
+```{r}
+l = length(cost)
+x = sort(cost)
+t = rep(0,l)
+plot(x,t, main="Donnés representés dans l'axe x avec y égal à 0 partout" )
+```
+
+Et aussi une histogramme des données:
+```{r}
+set.seed(2,kind="Marsaglia-Multicarry")
+N = rexp(l)
+mu = (cost_ordered[41]-cost_ordered[14])/(q[41]-q[14])
+ABSC = seq(min(N),max(N),length.out=l)/lambda
+DENSITY = dexp(ABSC,rate = lambda)
+hist(cost, probability=TRUE, main="Histogramme de données de coût des accidents nucléaires", ylim=range(DENSITY))
+lines(x = ABSC, y = DENSITY, col="red")
+```
+
+En regardant le graphique des quantile et, principalement, l'histogramme, nous pouvons nous convaincre, que l'approche exponentielle est plus acceptable comme loi de probabilité, au moins en comparaison avec la loi normale.
+
+# **Exercice 2**: Estimation ponctuelle des paramètres d'une loi exponentielle
+
+Un estimateur est une fonction généré par les données pour prédire une valeur d'une quantité d'intérêt associé à un paramètre $\theta$ quelconque d'un modèle statistique.
+
+Normalement, il y a plusieurs possibles paramètres d'intérêt et encore plusieurs façons d'estimer ce paramètre. Alors, il faut savoir lequel choisir.
+
+Un paramètre peut être caractérisé par deux valeurs qui sont fondamentales pour leur caractériser et qui permettent d'analyser s'ils sont optimales ou pas. Ces deux paramètres sont, le biais et la variance. Le biais est défini comme l'espérance de la différence entre l'estimateur et la vraie valeur de la quantité d'intérêt, c'est-à-dire:
+
+$$b(\theta;\hat{g}) = \mathbb{E}_{\theta}[\hat{g}(X) - g(\theta)]$$
+La variance est définie comme l'espérance du carré de la différence entre l'estimateur lui-même et sa moyenne, c'est-à-dire:
+
+$$\mathbb{V}ar_{\theta}(\hat{g}(X)) = \mathbb{E}_{\theta}[(\hat{g}(X) - \mathbb{E}_{\theta}[\hat{g}(X)])^2]$$
+
+Où $g(\theta)$ est la vraie valeur de la quantité d'intérêt et $\hat{g}(X)$ est la valeur de l'estimateur. Le biais est un indicateur d'écart entre la valeur cherchée et la valeur estimée, alors que la variance, est une mesure de l'écart des possibles valeurs de l'estimation due aux échantillons auxquels on a accès. Tandis que le biais dit quelque chose sur la certitude d'une estimation, la variance dit quelque chose sur la précision de cette estimation. Pourtant, nous voulions que les deux soient le plus petit possible.
+
+Pour évaluer cela, nous pouvons formuler une fonction appelée risque quadratique moyenne, qui permet d'évaluer les candidats à estimateurs à partir de cette formule, elle sera appelé erreur quadratique moyenne, et sera donnée par:
+
+$$EQM(\theta;\hat{g}) = (b(\theta;\hat{g}))^2+\mathbb{V}ar_{\theta}(\hat{g}(X))$$
+
+Comme avoir un estimateur sans biais semble assez normale et nécessaire, on peut définir un estimateur UVMB (uniformément de variance minimale parmi les estimateurs sans biais) de $g$ comme un estimateur de qui soit pour les valeurs de $\theta$ et en comparaison avec tous les autres estimateurs possibles (sans biais), celui qu'aie la plus petite valeur de $EQM(\theta;\hat{g})$. C'est-à-dire que $\hat{g}$ est tel que:
+
+$$EQM(\theta;\hat{g}) \leq EQM(\theta;\hat{g}')\ \forall\ \theta\ \in\ \Theta,\ \ \forall\ \hat{g}'\ \in\ \Gamma$$
+Néanmoins, cette définition peut être assez vague, même parce que n'est pas possible connaitre tous les estimateurs possibles, non plus de trouver un estimateur minimal dans le sens de l'erreur quadratique. Donc, il serait bien de prédire une borne inférieure à laquelle nous puissions nous référer. Cela existe et s'appelle Borne de Cramér-Rao.
+
+La borne de Cramér-Rao est une définition d'une valeur minimale de la variance pour un estimateur non-biaisé, et alors, représente une valeur minimale de l'erreur quadratique de ce paramètre parmi les estimateurs qui peuvent être choisis. La borne de Cramér-Rao est donnée par:
+
+$$\mathbb{V}ar_{\theta}(\hat{g}(X)) \geq \dfrac{g'(\theta)^2}{I(\theta)},\ \ \ \forall\ \theta\ \in\ \Theta $$
+
+Où $g'(\theta)^2$ est le carré de la derivé première du paramètre d'intérêt $g(\theta)$ et $I(\theta)$ est appelé d'information de Fischer et vaut, par définition:
+
+$$I(\theta) = \mathbb{E}_\theta \left\{\left(\dfrac{\partial\ log\ p}{\partial \theta}(x;\theta)\right)^2\right\}$$
+
+Si un estimateur attend l'égalité de la borne de Crmér-Rao il est dit un estimateur efficace et les estimateurs efficaces sont toujours estimateurs UVMB (le contraire n'est pas toujours vrai).
+
+Sachant que la distribution suit une loi exponentielle $\mathcal{E}(\lambda)$ nous pouvons choisir comme estimateur de notre paramètre d'intérêt $g_1(\theta) = \frac{1}{\lambda}$ l'estimateur $T_1$ égal à:
+
+$$T_1 = \frac{1}{n}\Sigma_{i=1}^n X_i$$
+
+Maintenant il nous manque savoir si $T_1$ est un estimateur UVMB. Pour garrantir cela il faut prouver que $b(\lambda;\hat{g}) = 0$, et qui $\mathbb{V}ar_{\lambda}(\hat{g_1}(X)) = \frac{g_1'(\lambda)^2}{I(\lambda)}$. En partant du biais, nous pouvons faire le calcul par la définition:
+
+$$b(\lambda;\hat{g_1}) = \int_{\mathcal{X}} (T_1 - g_1(\lambda))\cdot p(X,\lambda)\mu(dx)$$
+$$b(\lambda;\hat{g_1}) = \int_{\mathcal{X}} \left(\frac{1}{n}\Sigma X_i - g_1(\lambda)\right)\cdot p(X,\lambda)\mu(dx)$$
+$$b(\lambda;\hat{g_1}) = \frac{1}{n}\Sigma \int_{\mathcal{X}} X_i \cdot p(X,\lambda)\mu(dx)-\int_{\mathcal{X}} g_1(\lambda) \cdot p(X,\lambda)\mu(dx)$$
+$$b(\lambda;\hat{g_1}) = \frac{1}{n}\Sigma \int_{\mathcal{X}} x_i \cdot e^{-\lambda x_i}\mu(dx)-g_1(\theta)$$
+
+$$b(\lambda;\hat{g_1}) = \frac{1}{\lambda}-g_1(\lambda) = 0$$
+Maintenant, en relation à la variance, allons, premièrement calculer $g'(\lambda)^2$ et $I(\theta)$, sachant $\theta = \lambda^{-1}$:
+
+$$g_1'(\lambda)^2 = \left(\frac{dg(\lambda)}{d\lambda}\right)^2$$
+$$g_1'(\lambda)^2 = \left(\frac{d \left[\frac{1}{\lambda}\right]}{d\lambda} \right)^2$$
+$$g_1'(\lambda)^2 = \left(- \frac{1}{\lambda^2} \right)^2$$
+$$g_1'(\lambda)^2 = \frac{1}{\lambda^4}$$
+$$I(\lambda) = n\cdot I_1(\lambda)$$
+
+$$I_1(\lambda) = \int_\mathcal{X} \left(\frac{\partial\ log\ p}{\partial \lambda}(x;\lambda)\right)^2p(x;\lambda)\mu(dx)$$
+$$I_1(\lambda) = \int_\mathcal{X} \left(\frac{\partial\ p}{\partial \theta}(x;\theta)\frac{1}{p(x;\theta)} \right)^2 p(x;\theta)\mu(dx)$$
+$$I_1(\lambda) = \int_\mathcal{X} \left(\nabla_{\theta}\ p(x;\theta)\frac{1}{p(x;\theta)} \right)^2 p(x;\theta)\mu(dx)$$
+$$I_1(\theta) = \int_\mathcal{X} \left(\frac{\partial\ -\lambda e^{-\lambda x} }{\partial \lambda }\right)^2 \frac{1}{e^{-\lambda x}}\mu(dx)$$
+
+$$I(\lambda) = \int_\mathcal{X} \left(e^{-\lambda x}(-1+\lambda x)\right)^2 \frac{1}{e^{-\lambda x}}\mu(dx)$$
+$$I_1(\lambda) = \frac{1}{\lambda^2}$$
+$$I(\lambda) = n\frac{1}{\lambda^2}$$
+
+
+Et, finalement, en calculant la variance de l'estimateur:
+
+$$\mathbb{V}ar_ \lambda (\hat{g_1}(X))= \frac{1}{n^2}\left(\Sigma\ [ \mathbb{V}ar_ \lambda (X)]\right)$$
+$$\mathbb{V}ar_ \lambda (\hat{g_1}(X))= \frac{1}{n^2}\left(\Sigma\ \frac{1}{\lambda^2}\right)$$
+$$\mathbb{V}ar_ \lambda (\hat{g_1}(X))= \frac{1}{n\lambda^2}$$
+Si maintenant on compare les deux côtés:
+
+$$\mathbb{V}ar_ \lambda (\hat{g}(X)) = \frac{g_1'(\lambda)}{I(\lambda)}= \frac{\frac{1}{\lambda^4}}{\frac{n}{\lambda^2}} = \frac{1}{n\lambda^2}$$
+Dons, $T_1$ est un estimateur efficace et UVMB!
+
+Si maintenant on fait un choix d'une autre variable $T_{1,\alpha}$, où:
+
+$$\tilde{T}_{1,\alpha} = \alpha \cdot T_1$$
+Nous pouvons montrer qui pour certaines valeurs de $\alpha$ font que le risque quadratique soit plus petit que le risque de $T_1$, n'importe quel soit $\lambda$. C'est-à-dire que:
+
+$$R(\lambda,\tilde{T}_{1, \alpha}) = R(\lambda,T_{1, \alpha})$$
+Pour comprendre cela, nous pouvons recalculer le biais et la variance par $\tilde{T}_{1, \alpha}$:
+
+$$b(\lambda;\hat{g}) = \mathbb{E}_{\theta}[\tilde{T}_{1, \alpha} - g_1(\theta)]$$
+Comme il change par une constante de $T_1$, le biais sera:
+
+$$b(\lambda;\tilde{T}_{1,\ \alpha}) = (\alpha-1) g_1(\lambda)$$
+
+$$\mathbb{V}ar_{\lambda}(\tilde{T}_{1,\ \alpha}) = \frac{\alpha^2}{n^2}\Sigma\ [\mathbb{V}ar(X)] = \frac{\alpha^2}{n}g_1(\lambda)^2$$
+Donc, le risque quadratique sera:
+
+$$R(\lambda,\tilde{T}_{1, \alpha}) = (b(\lambda;\tilde{T}_{1,\ \alpha}))^2+\mathbb{V}ar_{\lambda}(\tilde{T}_{1,\ \alpha}) = (\alpha-1)^2 g_1(\lambda)^2 + \frac{\alpha^2}{n}g_1(\lambda)^2$$
+Tandis que le risque de $T_1$ vaut:
+
+$$R(\lambda,T_1) = \frac{1}{n}g_1(\lambda)^2$$
+Donc, on peut trouver des valeurs de $\alpha$ dans lesquels le risque associé à $\tilde{T}_{1, \alpha}$ soit plus petit que le risque $T_1$. Basiquement, nous pouvons regarder les paramètres de risque et calculer une inégalité, qui dans ce cas sera:
+
+$$(\alpha-1)^2 + \frac{\alpha^2}{n} \leq \frac{1}{n}$$
+Maintenant, il faut simplement calculer les racines de cette équation pour trouver des limites dans lesquels nous devons chosir $\alpha$ pour que le risque de $\tilde{T}_{1, \alpha}$ soit plus petit. Le resultat est la bande suivante:
+
+$$\alpha \in \left( \frac{n-1}{n+1}; 1 \right)$$
+Qui dépendent visiblement de n, la taille de l'échantillon.
+
+Ce résultat peut paraitre un peu absurde une fois que nous avons dit que $T_1$ était le meilleur estimateur possible. Mais en fait, $T_1$ est le meilleur estimateur parmi les sans biais, mais comme $\tilde{T}_{1,\ \alpha}$ est biaisé, il n'attend pas aux réquisits pour se soumettre à la borne de Cramér-Rao et des autres définitions.
+
+Maintenant, si nous voulions estimer la médiane de cette variable aléatoire, nous devions construire un estimateur, par la méthode des moments, par exemple. Cependant, la médiane $g_2(\lambda)$ est définie par:
+
+$$g_2(\lambda) = \frac{log(2)}{\lambda}$$
+Alors, si nous construisions un estimateur pour la moyenne, l'estimateur de la médiane sera l'estimateur de la médiane fois une constante, $log(2)$ pour être plus précis.
+
+Soit, alors $\varphi(x) = x$, l'estimateur de la médiane sera construit comme:
+
+$$\Phi(\lambda) = log(2)\cdot \mathbb{E}_{\lambda}(\varphi(X))$$
+$$\Phi(\lambda) = log(2)\cdot \int_X \varphi(x)\cdot p(x,\lambda)\mu (dx)$$
+$$\Phi(\lambda) = log(2)\cdot \int_X \varphi(x)\cdot p(x,\lambda)\mu (dx)$$
+$$\Phi(\lambda) = log(2)\cdot \frac{1}{\lambda}$$
+
+Et donc l'estimateur empirique sera:
+
+$$T_2 (X) = log(2)\frac{1}{n} \Sigma \varphi(X_i)$$
+$$T_2 (X) = log(2)\frac{1}{n} \Sigma X_i$$
+
+Comme $T_2$ change de $T_1$ par une constante, nous pouvons nous poser la question suivante: est-ce qu'on peut estimer $g_1(\lambda)$ à partir de $T_2$ construit avec un risque plus petit que cela de $T_1$. Et donc, la réponse dépend de la taille de l'échantillon étudié. Dans ce cas-là, $n = 55$. comme $\alpha_{min} = 0.964$ et la constant de $T_2$ est égal à $log(2) = 0.693$, donc la réponse est non, l'erreur quadratique moyenne sera plus grande en utilisant $T_2$ au lieu de $T_1$.
+
+En utilisant la définition de $T_1$ et $T_2$ pour calculer les respectifs paramètres de façon empirique, ce que nous obtenons est:
+
+```{r}
+t1 = 1/length(cost)*sum(cost)
+t2 = log(2)*t1
+cost_ordered = sort(cost)
+medianne = cost_ordered[23] # ou cost[ceiling(length(cost)/2)]
+```
+
+Bien sûr que nous pourrions avoir une taille de l'échantillon dans lequel le risque de $T_2$ serait plus petit que celle de $T_1$. Nous pouvons donc, générer un graphique pour mieux observer cela.
+
+```{r}
+lambda = 1/t1
+n = 1:55
+R1 = 1/(n*lambda)
+R2 = ((log(2)-1)^2+log(2)/n)/lambda
+plot(n, R1, type = "l", col = "blue", xlab = "Taille de l'échantillon", ylab = "Risque", main = "Comparaison des risque des estimateurs T_1 et T_2")
+lines(n,R2, col = "red")
+legend("topright", legend = c("Risque d'estimateur T_1", "Risque d'estimateur T_2"),lty = 1, col = c("blue", "red"))
+```
+
+Le graphique preuve que, il y a, en fait une partie trés étroite au début, où le risque de $T_2$ est plus petit que le risque de $T_1$. Pour être plus précis, cette partie va de n = 1 jusqu'à n = 5.
+
+# **Exercice 3**: Test sur le paramètre d'une loi
+
+Maintenant, nous voudrions faire un test statistique qui puisse nous donner une réponse à la question suivante:
+<center>
+
+**Le coût moyen des accidents, est-elle plus petit q'un millard de dollars?**
+
+</center>
+
+
+Pour résoudre cette question, il faut tout d'abord, connaître une propriété des lois exponentielles. Nous pouvons choisir, par exemple, une variable aléatoire (v.a.) $Y$ tel que:
+
+$$Y = \sum_{i=1,}^{N}X_i$$
+
+Pour savoir quelle est la loi de probabilité de $Y$, il faut mieux comprendre comment interpréter une loi exponentielle.
+
+Analysons une loi Gamma, $\mathcal{G}(\rho,\beta)$. Cette loi a une fonction de densité de probabilité donnée par:
+
+$$p(x;\rho,\beta) = \frac{\beta^{\rho}x^{\rho-1}e^{-\beta x}}{\Gamma(\rho)}$$
+
+Si nous choisissons $\alpha = 1$, la fonction de densité de probabilité est réduite à:
+
+$$p(x;1,\beta) = \beta\cdot e^{-\beta x}$$
+
+Qui, n'est pas fait par hasard, est la densité de la loi exponentielle. En fait, la loi Gamma est une loi très générale, d'où nous pouvons étudier plusieurs cases particulières, par exemple la loi exponentielle, mais pas seulement. Alors, la loi exponentielle de paramètre $\lambda$ n'est qu'une loi Gamma de paramètres $\mathcal{G}(1,\lambda)$, et donc, nous pouvons voir $X$, au moins pour l'instant, comme suivant une loi Gamma.
+
+L'avantage de faire cette considération est de pouvoir utiliser les propriétés d'une loi Gamma. L'une de ces propriétés est le fait que si nous avons $n$ variables aléatoires $X_i$, $i= 1, 2,\cdots,n$ qui suivent une loi Gamma $\mathcal{G}(\rho_i,\beta)$ alors, une variable $Y = \sum_{i=1}^{n} X_i$ suivra une loi Gamma du type:
+
+$$Y \thicksim  \mathcal{G} \left(\sum_{i= 1}^{n}\rho_i, \beta \right)$$
+
+Donc, comme notre variable aléatoire suit une loi exponentielle, (qui n'est qu'une loi $\mathcal{G}(1,\lambda)$), notre statistique suit, par conséquent, une loi Gamma $\mathcal{G}(n,\lambda)$.
+
+Maintenant il faut développer formellement notre règle de décision.
+
+Sachant que notre question à prouver est, "peut-on dire que le cout moyen des accidents sont plus petits qu'un milliard de dollars ?", nous pouvons dire que notre hypothèse nulle est cout égal à un milliard  et l'hypothèse alternative sera le coût est plus petit qu'un milliard. En termes du paramètre $\lambda$, cela signifie:
+
+"Soit $\lambda$ un paramètre d'une v.a $X$ tel que $\lambda$ est défini dans un espace $\Lambda = \Lambda_0 \cup \Lambda_1$. L'espace des actions est $\mathcal{A}$ = {0, 1} et une procédure de test est une fonction mesurable des observations $\delta$: Xmapsto A = {0, 1} : si $\delta$(x) = 0, nous acceptons l'hypothèse H_0. Dans le cas contraire, nous le rejetons, c'est-à-dire que nous accepterons l'hypothèse H_1."
+
+Donc, $T(X)$ suivra une loi de probabilité $\mathcal{P} = \left\{\mathcal{G}(n,\lambda), \lambda\ \in\ \mathbb{R}_+ \right\}$, où $\Lambda_0 = [0, 0.001]$ et $\Lambda_1 = (0.001, +\infty)$.
+
+Les hypothèses, nulle et alternatives, notées par $H_0$ et $H_1$ respectivement, valent:
+
+$$H_0: \lambda = \lambda_0 = 0.001 \qquad H_1: \lambda > \lambda_0 $$
+Le résume de l'information sera le statistique $T(X)$, tel que:
+
+$$T(X) = \sum_{i=1,}^{N}X_i$$
+D'ici, nous définissons une fonction auxiliaire $Z(T(X))$ tel que $\delta(x)$ sera une fonction indicatrice dépendent de cette fonction auxiliaire. C'est-à-dire que:
+
+$$\delta(x) = \mathbb{1}\circ Z(T)$$
+Et $Z(T)$ vaut:
+
+$$Z(T(X)) = \frac{p_{H_1}(T(X);n,\lambda)}{p_{H_0}(T(X);n,\lambda)}$$
+
+Mais comme la fonction indicatrice prends en compte seulement un seuil $s$ de $Z(T)$, nous pouvons faire quelques simplifications. À commencer par l'hypothèse alternative, comme elle représente une hypothèse de $\lambda$ plus grand que $\lambda_0$ n'importe combien, nous pouvons la réécrire comme une $\lambda_1$ qui est la somme entre $\lambda_0$ et une constante $\epsilon > 0$ quel que soit $\epsilon$.
+
+
+
+$$ Z(T(X)) = \frac{p_{H_1}(T(X);\lambda)}{p_{H_0}(T(X);\lambda)} = \frac{\frac{\lambda_1^{n}T^{n-1}e^{-\lambda_1 T}}{\Gamma(n)}}{\frac{\lambda_0^{\rho}T^{n-1}e^{-\lambda_0 T}}{\Gamma(n)}} $$
+
+$$Z(T(X)) = \left(\frac{\lambda_1}{\lambda_0}\right)^n e^{-(\lambda_1-\lambda_0) T}$$
+Si la fonction indicatrice $\delta(x)$ vaut 1 quand $P[Z(T(X)) > s]$ dépasse un certain seuil $s$, cela veut dire que:
+
+$$\left(\frac{\lambda_1}{\lambda_0}\right)^n e^{-(\lambda_1-\lambda_0) T} > s$$
+
+$$e^{-(\lambda_1-\lambda_0) T} > s\left(\frac{\lambda_0}{\lambda_1}\right)^n$$
+$$-(\lambda_1-\lambda_0) T > \log(s)+ n\cdot(\log(\lambda_0)-\log(\lambda_1))$$
+$$ T < \frac{n \log(\lambda_1)-\log(s) -n\log(\lambda_0)}{\epsilon} = s^*$$
+
+Et, alors, la fonction de décision de rejet de l'hypothèse nulle est:
+
+$$\delta(x) = \mathbb{1}_{\left\{\sum_{i=1}^{n}X_i < s^* \right\}}$$
+Où $s$ est un seuil tel que $\mathbb{P}_\lambda [Z(T(x)) > s] = quantile\{1-\alpha\}$ où $\alpha$ est une valeur limite defini par n'importe qui et qui signifie le pire risque de rejeter l'hypothèse nulle étant elle vraie. En général, cela est choisie comme 5%, mais ce n'est pas obligatoire. Nous pouvons écrire aussi an termes de $s$, qui est un seuil tel que $\mathbb{P}_\lambda [T(x) < s^*] = quantile\{\alpha\}$.
+
+Le risque assiocié à chacune des décisions, valent:
+
+$$R(\lambda, \delta) = \mathbb{E}_\lambda[\delta(x)] = \mathbb{P}_\lambda[\delta(x) = 1] \qquad \forall \lambda \in \Lambda_0$$
+Appelé risque de première espèce, et:
+
+$$R(\lambda, \delta) = \mathbb{E}_\lambda[1- \delta(x)] = \mathbb{P}_\lambda[\delta(x) = 0] =  \qquad \forall \lambda \in \Lambda_1$$
+Appelé risque de deuxième espèce.
+
+Maintenant, nous pouvons exécuter le test pour l'échantillon donné avec un niveau de confiance de 95%, c'est-à-dire de $\alpha$ = 0.05.
+
+```{r}
+seuil = qgamma(0.05, 55, rate = 0.001, lower.tail = TRUE, log.p = FALSE)
+pvalue = pgamma(sum(cost), 55, rate = 0.001, log = FALSE)
+T = sum(cost)
+```
+
+A partir de ce calcul, nous voyons que l'hypothèse nulle est absolument  rejetable, une fois que le pvalue trouvé est plus petit que $\alpha$. C'est à dire que le risque de faire un mauvais rejet de l'hypothèse nulle est d'autour de 1.37%. Nous pourrions voir aussi le seuil, qui signifie la valeur maximum de $T(X)$ qui permet encore de rejeter l'hypothèse nulle. Comme $T(X)$ est plus petit que seuil (39948.5 contre 43395.8), donc, c'est-à-dire que nous pouvons la rejeter.
+
+```{r}
+X = seq(1,100000,500)
+d = dgamma(X, 55, rate = 0.001)
+plot(X,d, type = "l",xlab = "T(X)",ylab = "Densité de probabilité", main = "Densité de probabilité du paramètre T(X)")
+abline(v = seuil, col = "red")
+abline(v = T, col = "green")
+legend("topright", legend =c("Courbe de densité", "Limite de rejet de T", "Valeur de T"), lty=1, col=c("black", "red", "green"))
+```
+
+Si nous considérons que $n$ est déjà suffisamment grande pour appliquer le théorème centrale de la limite, nous pouvons admettre $T(X_i)$ comme une variable aléatoire de moyenne $\mu$ et variance $\sigma^2$ d'une distribution normale. Dans ce cas:
+
+$$T \thicksim  \mathcal{N}\left(\frac{n}{\lambda},\frac{n}{\lambda^2}\right)$$
+
+Dans ce cas-là, on peut recalculer de seuil et la valeur p pour cette distribution:
+```{r}
+seuiln = qnorm(0.525, mean = 55/0.001 , sd = sqrt(55/(0.001^2)), lower.tail = TRUE, log.p = FALSE)
+pvaluen = pnorm(T, mean = 55/0.001, sd = sqrt(55/(0.001^2)), lower.tail = TRUE, log.p = FALSE)
+X = seq(0,100000,500)
+d = dnorm(X, mean = 55/0.001, sd = sqrt(55/(0.001^2)), log = FALSE)
+plot(X,d, type = "l",xlab = "T(X)",ylab = "Densité de probabilité", main = "Densité de probabilité du paramètre T(X)")
+abline(v = seuil, col = "red")
+abline(v = T, col = "green")
+legend("topright", legend =c("Courbe de densité", "Limite de rejet de T","Valeur de T"), lty=1, col=c("black", "red","green"))
+```
+
+Ce test montre également que la valeur du seuil permet de garantir que la moyenne est plus petite que 1 millard de dollars, ainsi comme l'autre. Dans ce cas-là, la valeur p est un peu plus grand et vaut autour de 2,1%.
+
+Maintenant, on peut tracer la fonction puissance pour certaines tailles de l'échantillon $n$ si $\lambda$ varie dans $(0, 3\lambda_0)$. La famille de courbes obtenues par $n =\ 10,\ 50,\ 100,\ 500,\ 100000$ sont:
+```{r}
+betta = rep(0,length(seq(0, 3*0.001,0.01*0.001)))
+lamb = seq(0, 3*0.001,0.01*0.001)
+
+n = 10
+seuil = qgamma(0.05, n, rate = 0.001)
+betta = pgamma(seuil, n, rate = lamb, log = FALSE) 
+plot(lamb, betta, type ="l",xlab = "lambda", ylab = "Fonction puissance", main = "Fonction puissance x lambda par différents valeurs de alpha")
+
+n = 50
+seuil = qgamma(0.05, n, rate = 0.001)
+betta = pgamma(seuil, n, rate = lamb, log = FALSE) 
+lines(lamb, betta, col= "green")
+
+n = 100
+seuil = qgamma(0.05, n, rate = 0.001)
+betta = pgamma(seuil, n, rate = lamb, log = FALSE)
+lines(lamb, betta, col= "red")
+
+n = 500
+seuil = qgamma(0.05, n, rate = 0.001)
+betta = pgamma(seuil, n, rate = lamb, log = FALSE) 
+lines(lamb, betta, col= "black")
+
+n = 100000
+seuil = qgamma(0.05, n, rate = 0.001)
+betta = pgamma(seuil, n, rate = lamb, log = FALSE) 
+lines(lamb, betta, col= "blue")
+
+legend("bottomright", legend =c("n=10", "n=50", "n=100", "n=500", "n=100000"), lty=1, col=c("black", "green","red","black","blue"))
+```
+
+Le résultat de ces courbes est d'une tendance à avoir une croissance plus vite (un haut "slope") pour $n$ croissante. Cela se passe bien évidemment parce que si $n$ augmente, la valeur de la variable aléatoire $T(X)$ augmente, la variable aleatoire. Comme alpha de $T(X)$, est le $n$ lui-même, la probabilité cumulé continue 0 pendant une période à chaque fois plus large, ce qui fait la fonction puissance avoir une valeur 1 pour une bande aussi large.
+
+Si maintenant nous choisissons $\lambda' < \lambda_0$, cela serait intéressant de savoir s'il y a des relations entre les deux tests, sachant que le deuxième test sera fait sur les hypothèses:
+
+$$H_0: \lambda = \lambda' = 0.001 \qquad H_1: \lambda > \lambda_0 $$
+
+Avec les mêmes définitions de $X_i \thicksim  \mathcal{E}(\lambda), i= 1, 2, \cdots ,n$ et $T(X) = \sum_{i=1}^n X_i$. Dans ce cas nous pouvons voir que si nous définissons $Z(T(X))$, nous allons arriver à quelque chose de pareil à la formulation antérieure, où
+
+$$ Z(T(X)) = \frac{p_{H_1}(T(X);\lambda)}{p_{H_0}(T(X);\lambda)} = \frac{\frac{\lambda_1^{n}T^{n-1}e^{-\lambda_1 T}}{\Gamma(n)}}{\frac{\lambda_0^{\rho}T^{n-1}e^{-\lambda_0 T}}{\Gamma(n)}} $$
+$$\vdots$$
+
+$$ T < \frac{n \log(\lambda_1)-\log(s)- n\cdot \log(\lambda')}{\epsilon_1+\epsilon_2} = s*'<\frac{n \log(\lambda_1)-\log(s) -n\log(\lambda_0)}{\epsilon} = s^*$$
+
+D'où on peut percevoir que $s* '$ est plus petit que $s^{*}$, dont nous obtenons $\alpha$, alors, la valeur $\alpha'$ lié à $s*'$ est plus petit que $\alpha$, est donc, nous pouvons dire que si pour tout $\lambda' < \lambda_0$, le test $H_0 : \lambda = \lambda_0$ vs. $H1 : \lambda > \lambda_0$ est de niveau $\alpha' < \alpha$.
